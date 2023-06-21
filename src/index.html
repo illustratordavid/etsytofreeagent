@@ -11,7 +11,20 @@
 <body>
   <main>
     <h1>Vanilla JavaScript App</h1>
+    <p>Loading content from the API: <b id="name">...</b></b></p>
   </main>
+
+  <script>
+    (async function() {
+      try {
+        // purpleSock is the object key in the json returned
+        const { purpleSock } = await( await fetch(`/api/message`)).json();
+        document.querySelector('#name').textContent = purpleSock;
+      } catch (error) {
+        console.error(error)
+      }
+    }())
+  </script>
 </body>
 
 </html>
