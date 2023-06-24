@@ -6,12 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="styles.css">
   <title>Vanilla JavaScript App</title>
+  <script src="/js/papaparse.min.js"></script>
 </head>
 
 <body>
   <main>
     <h1>Vanilla JavaScript App</h1>
     <p>Loading content from the API: <b id="name">...</b></b></p>
+
+    <input type="file" id="fileSelector">
+    <button onclick="upload()">Upload</button>
   </main>
 
   <script>
@@ -20,10 +24,135 @@
         // purpleSock is the object key in the json returned
         const { purpleSock } = await( await fetch(`/api/message`)).json();
         document.querySelector('#name').textContent = purpleSock;
+        document.querySelector('#fileSelector').value = ""
       } catch (error) {
         console.error(error)
       }
     }())
+
+    async function transformDataAPI(dataIn) {
+        let dataOut = []
+        dataIn.forEach(element => {
+            let date = new Date(element.Date)
+            let transType = 'DEBIT'
+            switch (element.Type) {
+                case 'Sale':
+                    transType = 'POS'
+                    break;
+            
+                default:
+                    break;
+            }
+            let descArr = []
+            descArr.push(element.Type)
+            if (element.Title.trim() !== '') {
+                descArr.push(element.Title.replace(/[^a-z0-9| ]/gi,''))
+            }  
+            if (element.Info.trim() !== '') {
+                descArr.push(element.Info.replace(/[^a-z0-9| ]/gi,''))
+            }  
+
+            dataOut.push({
+                dated_on: `${date.getFullYear()}-${('0' + (date.getMonth()+1)).slice(-2)}-${('0' + (date.getDate()+1)).slice(-2)}`,// "30 September, 2022" to  YYYY-MM-DD
+                description: descArr.join(' ~ '),
+                amount: parseFloat(element.Net.split('£')[1]),
+                transaction_type: transType
+            })
+        })
+        console.log('dataOut', dataOut)
+        downloadCSV(dataOut)
+    }
+
+    async function transformDataCSV(dataIn) {
+        let dataOut = []
+        dataIn.forEach(element => {
+            if (element.Type !== 'Deposit') {
+                let date = new Date(element.Date)
+                let descArr = []
+                descArr.push(element.Type)
+                if (element.Title.trim() !== '') {
+                    descArr.push(element.Title.replace(/[^a-z0-9| ]/gi,''))
+                }  
+                if (element.Info.trim() !== '') {
+                    descArr.push(element.Info.replace(/[^a-z0-9| ]/gi,''))
+                }  
+                dataOut.push({
+                    dated_on: `${date.getDate()}/${('0' + (date.getMonth()+1)).slice(-2)}/${date.getFullYear()}`,// "30 September, 2022" to  DD/MM/YYYY
+                    description: descArr.join(' ~ '),
+                    amount: element.Net.replace('£','')
+                })
+            }
+        })
+        console.log('dataOut', dataOut)
+        downloadCSV(dataOut)
+    }
+
+    async function transformDataCSV_Amazon(dataIn) {
+        let dataOut = []
+        dataIn.forEach(element => {
+            let descArr = []
+            descArr.push('Sale')
+            descArr.push(element['Order ID'])
+            descArr.push(element['Product Details'].replace(/[^a-z0-9| ]/gi,''))
+            dataOut.push({
+                dated_on: `${element.Date}`,// DD/MM/YYYY
+                description: descArr.join(' ~ '),
+                amount: element['Total product charges']
+            })
+            // charge
+            let descArr2 = []
+            descArr2.push('Fee')
+            descArr2.push(element['Order ID'])
+            dataOut.push({
+                dated_on: `${element.Date}`,// DD/MM/YYYY
+                description: descArr2.join(' ~ '),
+                amount: element['Amazon fees']
+            })
+        })
+        console.log('dataOut', dataOut)
+        downloadCSV(dataOut)
+    }
+
+    function downloadCSV(dataIn) {
+        /*let rows = dataIn.map(function(obj) {
+            return Object.keys(obj).map(function(key) { 
+                return obj[key]
+            })
+        })
+        console.log(rows)
+        let colHeaders = [
+            'dated_on',
+            'description',
+            'amount',
+            'transaction_type'
+        ]
+        let headers = colHeaders.join(',') + "\n"
+        let csvContent = "data:text/csv;charset=utf-8," + headers + rows.map(e => e.join(",")).join("\n")*/
+        const csv = Papa.unparse(dataIn, {header: false, delimiter: ",", quotes: false})
+        let csvContent = "data:text/csv;charset=utf-8," + csv
+        var encodedUri = encodeURI(csvContent)
+        var link = document.createElement("a")
+            link.setAttribute("href", encodedUri)
+        var d = new Date();
+        var datetime = d.toJSON().split(':').join('-').split('.')[0];
+            link.setAttribute("download", `${document.getElementById('fileSelector').files[0].name.replace('.csv','')}_freeagent.csv`)
+        document.body.appendChild(link) // Required for FF
+        link.click()
+    }
+
+
+    function upload() {
+        Papa.parse(document.getElementById('fileSelector').files[0], {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function (results) {
+                console.log('papa complete', results.data)
+                transformDataCSV(results.data)
+            }
+        })
+    }
+   
   </script>
 </body>
 
